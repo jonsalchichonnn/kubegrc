@@ -1,0 +1,20 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: kubescape-scan
+  namespace: osc-test
+spec:
+  schedule: "0 0 * * 1" # Runs every Monday at midnight
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: kubescape-sa
+          containers:
+          - name: kubescape
+            image: bitnami/kubescape:latest
+            command:
+              - "/bin/sh"
+              - "-c"
+              - "kubescape scan framework nsa,mitre --verbose" # --format=json --output=/tmp/kubescape-report.json && cat /tmp/kubescape-report.json"
+          restartPolicy: OnFailure

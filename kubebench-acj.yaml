@@ -1,0 +1,56 @@
+apiVersion: apps.kruise.io/v1alpha1
+kind: AdvancedCronJob
+metadata:
+  name: kubebench-scan
+  namespace: osc-test
+spec:
+  schedule: "0 0 * * 1" # Runs every Monday at midnight
+  template:
+    broadcastJobTemplate:
+      spec:
+        template:
+          spec:
+            containers:
+              - name: kube-bench
+                image: docker.io/aquasec/kube-bench:latest
+                env:
+                  - name: NODE_NAME
+                    valueFrom:
+                      fieldRef:
+                        fieldPath: spec.nodeName
+                command:
+                    [
+                      "sh",
+                      "-c",
+                      "echo Running kube-bench on node: $(NODE_NAME) && kube-bench run --targets node,policies,managedservices --benchmark gke-1.6.0"
+                    ]
+                volumeMounts:
+                  - name: var-lib-kubelet
+                    mountPath: /var/lib/kubelet
+                    readOnly: true
+                  - name: etc-systemd
+                    mountPath: /etc/systemd
+                    readOnly: true
+                  - name: etc-kubernetes
+                    mountPath: /etc/kubernetes
+                    readOnly: true
+                  - name: home-kubernetes
+                    mountPath: /home/kubernetes
+                    readOnly: true
+            restartPolicy: Never
+            volumes:
+              - name: var-lib-kubelet
+                hostPath:
+                  path: "/var/lib/kubelet"
+              - name: etc-systemd
+                hostPath:
+                  path: "/etc/systemd"
+              - name: etc-kubernetes
+                hostPath:
+                  path: "/etc/kubernetes"
+              - name: home-kubernetes
+                hostPath:
+                  path: "/home/kubernetes"
+        completionPolicy:
+          type: Always
+          ttlSecondsAfterFinished: 30
