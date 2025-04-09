@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: event-monitor
+  namespace: osc-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: event-monitor
+  template:
+    metadata:
+      labels:
+        app: event-monitor
+    spec:
+      serviceAccountName: event-alert-sa
+      containers:
+      - name: event-monitor
+        image: jonsalchichonnnn/kubegrc:latest
+        env:
+        - name: SLACK_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: slack-secret
+              key: SLACK_TOKEN
+

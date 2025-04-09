@@ -4,7 +4,7 @@ metadata:
   name: kubebench-scan
   namespace: osc-test
 spec:
-  schedule: "0 0 * * 1" # Runs every Monday at midnight
+  schedule: "1 * * * *" #"0 0 * * 1" # Runs every Monday at midnight
   template:
     broadcastJobTemplate:
       spec:

@@ -4,6 +4,8 @@ set -u # Treats unset variables as an error and exit
 set -o pipefail # exit if pipe error
 set -x # print command before execution (debug)
 
+kubectl create secret generic slack-secret --from-literal=SLACK_TOKEN=$SLACK_TOKEN -n osc-test
+
 kubectl apply -f create-namespace.yaml
 
 # kubenbench set up
@@ -13,5 +15,10 @@ kubectl apply -f kubebench-acj.yaml
 kubectl apply -f kubescape-sa.yaml
 kubectl apply -f kubescape-cj.yaml
 
+
+kubectl apply -f event-alert-sa.yaml
+kubectl apply -f event-monitor-deploy.yaml
+
 # kyverno policies enforcement + default initial scan
-kubectl kyverno apply pss.yaml --cluster - &
+kubectl kyverno apply pss.yaml --cluster &
+kubectl create -f pss.yaml
