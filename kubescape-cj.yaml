@@ -4,7 +4,7 @@ metadata:
   name: kubescape-scan
   namespace: osc-test
 spec:
-  schedule: "0 0 * * 1" # Runs every Monday at midnight #"*/1 * * * *" #
+  schedule: "0 0 * * 1" # Runs every Monday at midnight 
   jobTemplate:
     spec:
       template:
