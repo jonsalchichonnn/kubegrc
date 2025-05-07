@@ -4,6 +4,8 @@ import requests
 import threading
 import time
 from collections import OrderedDict
+from datetime import datetime, timezone
+
 
 # Retrieve the Slack token from environment variables
 SLACK_TOKEN = os.getenv('SLACK_TOKEN')
@@ -22,6 +24,20 @@ TIMEOUT = 6
 notified_jobs = OrderedDict()
 
 
+def add_to_cache(job_name):
+    # Add the job to the cache with the current timestamp
+    notified_jobs[job_name] = time.time()
+
+    # If the cache exceeds the max size, remove the oldest item
+    if len(notified_jobs) > CACHE_MAX_SIZE:
+        notified_jobs.popitem(last=False)
+
+
+def is_job_notified(job_name):
+    # Check if the job is already in the cache
+    return job_name in notified_jobs
+
+
 def send_slack_notification(message):
     for attempt in range(RETRIES):
         response = requests.post(
@@ -38,16 +54,6 @@ def send_slack_notification(message):
     print("Failed to send notification after retries.")
 
 
-def process_policy_reports(event_type, report):
-    # Process Kyverno PolicyReports
-    name = report.get("metadata", {}).get("name", "Unknown")
-    results = report.get("results", [])
-    message = f"⚠️ *Kyverno Policy Report Alert*\n*Report Name:* {name}\n*Event Type:* {event_type}\n*Violations:* {len(results)}\n"
-    for result in results[:5]:
-        message += f"- Policy: {result['policy']} ({result['status']})\n  {result['message']}\n"
-    send_slack_notification(message)
-
-
 def watch_policy_reports():
     # Watch Kyverno PolicyReports
     config.load_incluster_config()  # Load config once
@@ -60,38 +66,72 @@ def watch_policy_reports():
                 api.list_cluster_custom_object,
                 group="wgpolicyk8s.io",
                 version="v1alpha2",
-                plural="clusterpolicyreports",
+                plural="policyreports",  # clusterpolicyreports
                 timeout_seconds=TIMEOUT
             ):
                 event_type = event["type"]
-                report = event["object"]
-                name = report.get("metadata", {}).get("name", "Unknown")
-                results = report.get("results", [])
-                message = f"⚠️ *Kyverno Policy Report Alert*\n*Report Name:* {name}\n*Event Type:* {event_type}\n*Violations:* {len(results)}\n"
-                for result in results[:5]:
-                    message += f"- Policy: {result['policy']} ({result['status']})\n  {result['message']}\n"
-                send_slack_notification(message)
+                if event_type == "MODIFIED":
+                    print(f"Received new policy report event: {event}")
+                    report = event["object"]
+                    name = report.get("metadata", {}).get("name", "Unknown")
+                    results = report.get("results", [])
+                    message = f"⚠️ *Kyverno Policy Report Alert*\n*Report Name:* {name}\n*Event Type:* {event_type}\n*Violations:* {len(results)}\n"
+                    for result in results[:5]:
+                        # ({result['status']})\n
+                        message += f"- Policy: {result['policy']}  {result['message']}\n"
+                    # TODO: CHECK FOR DUPS
+                    # send_slack_notification(message)
         except Exception as e:
             print(f"Error watching PolicyReports: {e}")
-            send_slack_notification(
-                f"⚠️ *Error Watching PolicyReports*\nException: {str(e)}")
+            # send_slack_notification(
+            #     f"⚠️ *Error Watching PolicyReports*\nException: {str(e)}")
         finally:
             watcher.stop()  # Clean up the watcher
         time.sleep(DELAY)  # Back off before retrying
 
 
-def add_to_cache(job_name):
-    # Add the job to the cache with the current timestamp
-    notified_jobs[job_name] = time.time()
+def watch_block_events():
+    config.load_incluster_config()
+    v1 = client.CoreV1Api()
+    script_start_time = datetime.now(timezone.utc)  # Track script start time
 
-    # If the cache exceeds the max size, remove the oldest item
-    if len(notified_jobs) > CACHE_MAX_SIZE:
-        notified_jobs.popitem(last=False)
+    while True:
+        try:
+            print("Watching Kubernetes events for policy violations...")
+            watcher = watch.Watch()
+            for event in watcher.stream(v1.list_event_for_all_namespaces, timeout_seconds=TIMEOUT):
+                ev = event['object']
+                event_time = ev.metadata.creation_timestamp
 
+                # Ignore old events
+                if event_time < script_start_time:
+                    continue
 
-def is_job_notified(job_name):
-    # Check if the job is already in the cache
-    return job_name in notified_jobs
+                reason = ev.reason
+                message = ev.message
+                involved_object = ev.involved_object
+                if reason == "PolicyViolation" or (ev.source.component and "kyverno" in ev.source.component.lower()):
+                    if not ev.related:
+                        send_slack_notification(f"ev.related = NONE\n{ev}")
+                    if not involved_object:
+                        send_slack_notification(
+                            f"involved_object = NONE\n{ev}")
+                    key = f"{ev.related.kind}|{ev.related.name}|{involved_object.namespace}|{involved_object.name}"
+                    if is_job_notified(key):
+                        print(f"Already notified for key: {key}")
+                        send_slack_notification(
+                            "Already notified for key: {key}")
+                        continue
+                    add_to_cache(key)
+                    msg = f"🚫 *{ev.related.kind} {ev.related.name} BLOCKED at {event_time}*\n*Namespace:* {involved_object.namespace}\n*Reason:* {reason} -> *{involved_object.kind}:* {involved_object.name}\n*Message:* {message}"
+                    send_slack_notification(msg)
+        except Exception as e:
+            print(f"Error watching events: {e}")
+            send_slack_notification(
+                f"⚠️ *Error Watching Events*\nException: {str(e)}")
+        finally:
+            watcher.stop()
+            time.sleep(DELAY)
 
 
 def watch_scan_jobs():
@@ -111,11 +151,11 @@ def watch_scan_jobs():
             ):
                 obj = event["object"]
                 name = obj.metadata.name
-                print("Job event!!! type:", event["type"])
 
                 if is_job_notified(name):
                     continue  # Skip already notified jobs
                 if "kubescape" in name and event["type"] == "MODIFIED":
+                    print("Job MODIFIED event!!!")
                     if obj.status.succeeded == 1:
                         send_slack_notification(
                             f"✅ *Scan Completed: {name}*\nCheck the results for details.")
@@ -187,6 +227,9 @@ if __name__ == "__main__":
 
     policy_thread.start()
     job_thread.start()
+
+    event_thread = threading.Thread(target=watch_block_events, daemon=True)
+    event_thread.start()
 
     print("Watching started...")
 
