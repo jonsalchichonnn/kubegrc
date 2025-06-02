@@ -5,6 +5,10 @@ import threading
 import time
 from collections import OrderedDict
 from datetime import datetime, timezone
+import json
+import yaml
+from google.cloud import storage
+import tempfile
 
 
 # Retrieve the Slack token from environment variables
@@ -19,7 +23,7 @@ NAMESPACE = "osc-test"
 SLACK_MESSAGE_URL = "https://slack.com/api/chat.postMessage"
 RETRIES = 3
 DELAY = 5
-CACHE_MAX_SIZE = 10
+CACHE_MAX_SIZE = 300
 TIMEOUT = 6
 notified_jobs = OrderedDict()
 
@@ -71,7 +75,7 @@ def watch_policy_reports():
             ):
                 event_type = event["type"]
                 if event_type == "MODIFIED":
-                    print(f"Received new policy report event: {event}")
+                    # print(f"Received new policy report event: {event}")
                     report = event["object"]
                     name = report.get("metadata", {}).get("name", "Unknown")
                     results = report.get("results", [])
@@ -199,9 +203,11 @@ def watch_scan_jobs():
                         f"broadcast job phase: {phase} - desired: {desired} - completed: {completed} - failed: {failed}")
 
                     if completed == desired and phase == "completed":
+                        print(
+                            f"++++Scan completed: {name} sending notification+++")
+                        add_to_cache(name)
                         send_slack_notification(
                             f"✅ *Scan Completed: {name}*\nCompleted on {completed} nodes.")
-                        add_to_cache(name)
                     elif failed > 0:
                         send_slack_notification(
                             f"❌ *Scan Failed: {name}*\nFailed on {failed} nodes.")
@@ -219,8 +225,86 @@ def watch_scan_jobs():
             time.sleep(DELAY)
 
 
+def send_policy_report_notification(report_file):
+    try:
+        # Read the policy report file
+        with open(report_file, 'r') as f:
+            report = yaml.safe_load(f)
+        
+        # Extract relevant information
+        results = report.get('results', [])
+        violations = sum(1 for r in results if r.get('result') == 'fail')
+        passes = sum(1 for r in results if r.get('result') == 'pass')
+        
+        # Create a detailed message
+        message = f"📊 *New Kyverno Policy Report*\n"
+        message += f"*Total Checks:* {len(results)}\n"
+        message += f"*Passed:* {passes} ✅\n"
+        message += f"*Failed:* {violations} ❌\n"
+        message += f"*For more details check the bucket:* gs://kubegrc/{report_file}\n"
+        
+        # if violations > 0:
+        #     message += "\n*Failed Policies:*\n"
+        #     for result in results:
+        #         if result.get('result') == 'fail':
+        #             message += f"- *{result.get('policy', 'Unknown')}*\n"
+        #             message += f"  • Rule: {result.get('rule', 'Unknown')}\n"
+        #             message += f"  • Message: {result.get('message', 'No message')}\n"
+        #             message += f"  • Severity: {result.get('severity', 'Unknown')}\n"
+        
+        send_slack_notification(message)
+    except Exception as e:
+        print(f"Error processing policy report notification: {e}")
+
+
+def get_latest_policy_report():
+    try:
+        # Initialize the GCS client
+        storage_client = storage.Client()
+        bucket = storage_client.bucket('kubegrc')
+        blobs = bucket.list_blobs(prefix='policy-reports/kyverno/kyverno_policy_report_')
+        
+        # Get the most recent report
+        latest_blob = None
+        latest_time = None
+        
+        for blob in blobs:
+            if blob.name.endswith('.yaml'):
+                if latest_time is None or blob.time_created > latest_time:
+                    latest_time = blob.time_created
+                    latest_blob = blob
+        
+        if latest_blob:
+            # Get the full path from the blob name
+            full_path = latest_blob.name
+            # Create directories if they don't exist
+            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            # Download to the original path
+            latest_blob.download_to_filename(full_path)
+            return full_path
+        return None
+    except Exception as e:
+        print(f"Error fetching latest policy report: {e}")
+        return None
+
+
+def process_latest_policy_report():
+    report_file = get_latest_policy_report()
+    if report_file:
+        try:
+            send_policy_report_notification(report_file)
+        finally:
+            # Clean up the temporary file
+            os.unlink(report_file)
+    else:
+        print("No policy reports found in the bucket")
+
+
 if __name__ == "__main__":
     print("Preparing Watch...")
+
+    # Add this line to process the latest report
+    process_latest_policy_report()
 
     policy_thread = threading.Thread(target=watch_policy_reports, daemon=True)
     job_thread = threading.Thread(target=watch_scan_jobs, daemon=True)

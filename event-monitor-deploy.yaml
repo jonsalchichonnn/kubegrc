@@ -23,4 +23,17 @@ spec:
             secretKeyRef:
               name: slack-secret
               key: SLACK_TOKEN
+        - name: GOOGLE_APPLICATION_CREDENTIALS
+          value: "/etc/gcp/credentials.json"
+        volumeMounts:
+        - name: gcp-credentials
+          mountPath: "/etc/gcp"
+          readOnly: true
+      volumes:
+      - name: gcp-credentials
+        secret:
+          secretName: gcp-bucket-credentials
+          items:
+          - key: credentials.json
+            path: credentials.json
 

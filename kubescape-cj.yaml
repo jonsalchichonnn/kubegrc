@@ -16,5 +16,5 @@ spec:
             command:
               - "/bin/sh"
               - "-c"
-              - "kubescape scan framework nsa,mitre --verbose" # --format=json --output=/tmp/kubescape-report.json && cat /tmp/kubescape-report.json"
+              - "kubescape scan framework nsa,mitre"
           restartPolicy: OnFailure
