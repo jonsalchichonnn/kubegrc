@@ -3,6 +3,8 @@ kind: ServiceAccount
 metadata:
   name: kubescape-sa
   namespace: osc-test
+  annotations:
+    iam.gke.io/gcp-service-account: "kubegrc-bucket-sa@mm-k8s-lab-01.iam.gserviceaccount.com"
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole

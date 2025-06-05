@@ -243,15 +243,6 @@ def send_policy_report_notification(report_file):
         message += f"*Failed:* {violations} ❌\n"
         message += f"*For more details check the bucket:* gs://kubegrc/{report_file}\n"
         
-        # if violations > 0:
-        #     message += "\n*Failed Policies:*\n"
-        #     for result in results:
-        #         if result.get('result') == 'fail':
-        #             message += f"- *{result.get('policy', 'Unknown')}*\n"
-        #             message += f"  • Rule: {result.get('rule', 'Unknown')}\n"
-        #             message += f"  • Message: {result.get('message', 'No message')}\n"
-        #             message += f"  • Severity: {result.get('severity', 'Unknown')}\n"
-        
         send_slack_notification(message)
     except Exception as e:
         print(f"Error processing policy report notification: {e}")

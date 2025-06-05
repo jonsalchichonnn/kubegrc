@@ -12,9 +12,27 @@ spec:
           serviceAccountName: kubescape-sa
           containers:
           - name: kubescape
-            image: bitnami/kubescape:latest
+            image: google/cloud-sdk:slim
             command:
               - "/bin/sh"
               - "-c"
-              - "kubescape scan framework nsa,mitre"
+              - |
+                # Install kubescape
+                curl -s https://raw.githubusercontent.com/kubescape/kubescape/master/install.sh | /bin/bash
+                # Run scan and upload to GCS
+                TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                kubescape scan framework nsa,mitre --format json --format-version v2 > /tmp/kubescape-report.json
+                gcloud auth activate-service-account --key-file=/etc/gcp/credentials.json
+                gsutil cp /tmp/kubescape-report.json gs://kubegrc/scan-results/kubescape/kubescape-report-${TIMESTAMP}.json
+            volumeMounts:
+            - name: gcp-credentials
+              mountPath: "/etc/gcp"
+              readOnly: true
+          volumes:
+          - name: gcp-credentials
+            secret:
+              secretName: gcp-bucket-credentials
+              items:
+              - key: credentials.json
+                path: credentials.json
           restartPolicy: OnFailure

@@ -10,15 +10,15 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 POLICY_REPORT_FILE="kyverno_policy_report_${TIMESTAMP}.yaml"
 kubectl kyverno apply pss.yaml --cluster --policy-report > ${POLICY_REPORT_FILE}
 
+echo "[+] Configuring dependencies for kubegrc..."
+kubectl apply -f create-namespace.yaml
+echo "[+] Created namespace for kubegrc!"
+
 # Upload to GCS bucket
 kubectl delete secret gcp-bucket-credentials -n osc-test --ignore-not-found
 kubectl create secret generic gcp-bucket-credentials --from-file=credentials.json=gcp-credentials.json -n osc-test
 gsutil cp ${POLICY_REPORT_FILE} gs://kubegrc/policy-reports/
 rm ${POLICY_REPORT_FILE}  # Clean up local file
-
-echo "[+] Configuring dependencies for kubegrc..."
-kubectl apply -f create-namespace.yaml
-echo "[+] Created namespace for kubegrc!"
 
 kubectl delete secret slack-secret -n osc-test --ignore-not-found
 kubectl create secret generic slack-secret --from-literal=SLACK_TOKEN=$SLACK_TOKEN -n osc-test

@@ -12,18 +12,23 @@ spec:
           spec:
             containers:
               - name: kube-bench
-                image: docker.io/aquasec/kube-bench:latest
+                image: google/cloud-sdk:slim
                 env:
                   - name: NODE_NAME
                     valueFrom:
                       fieldRef:
                         fieldPath: spec.nodeName
                 command:
-                    [
-                      "sh",
-                      "-c",
-                      "echo Running kube-bench on node: $(NODE_NAME) && kube-bench run --targets node,policies,managedservices --benchmark gke-1.6.0"
-                    ]
+                  - "/bin/sh"
+                  - "-c"
+                  - |    
+                    # kube-bench installation
+                    KUBE_BENCH_VERSION=0.10.1
+                    curl -L https://github.com/aquasecurity/kube-bench/releases/download/v${KUBE_BENCH_VERSION}/kube-bench_${KUBE_BENCH_VERSION}_linux_amd64.deb -o kube-bench_${KUBE_BENCH_VERSION}_linux_amd64.deb
+                    apt-get install ./kube-bench_${KUBE_BENCH_VERSION}_linux_amd64.deb -f && echo "kube-bench installed"
+                    # scan & upload results
+                    TIMESTAMP=$(date +%Y%m%d_%H%M%S) && echo Running kube-bench on node: $(NODE_NAME) && kube-bench run --targets node,policies,managedservices --benchmark gke-1.6.0 --json > /tmp/kubebench-report.json 
+                    gcloud auth activate-service-account --key-file=/etc/gcp/credentials.json && gsutil cp /tmp/kubebench-report.json gs://kubegrc/scan-results/kubebench/kubebench-report-${TIMESTAMP}-$(NODE_NAME).json
                 volumeMounts:
                   - name: var-lib-kubelet
                     mountPath: /var/lib/kubelet
@@ -37,7 +42,9 @@ spec:
                   - name: home-kubernetes
                     mountPath: /home/kubernetes
                     readOnly: true
-            restartPolicy: Never
+                  - name: gcp-credentials
+                    mountPath: "/etc/gcp"
+                    readOnly: true
             volumes:
               - name: var-lib-kubelet
                 hostPath:
@@ -51,6 +58,13 @@ spec:
               - name: home-kubernetes
                 hostPath:
                   path: "/home/kubernetes"
+              - name: gcp-credentials
+                secret:
+                  secretName: gcp-bucket-credentials
+                  items:
+                  - key: credentials.json
+                    path: credentials.json
+            restartPolicy: Never
         completionPolicy:
           type: Always
           ttlSecondsAfterFinished: 30
