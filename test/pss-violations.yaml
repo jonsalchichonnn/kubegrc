@@ -1,0 +1,129 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: privileged-pod
+  namespace: osc-test
+spec:
+  containers:
+  - name: privileged-container
+    image: nginx
+    securityContext:
+      privileged: true  # Violates disallow-privileged-containers policy
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: host-namespace-pod
+  namespace: osc-test
+spec:
+  hostNetwork: true  # Violates disallow-host-namespaces policy
+  hostPID: true
+  containers:
+  - name: host-namespace-container
+    image: nginx
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hostpath-pod
+  namespace: osc-test
+spec:
+  containers:
+  - name: hostpath-container
+    image: nginx
+    volumeMounts:
+    - name: host-volume
+      mountPath: /host
+  volumes:
+  - name: host-volume
+    hostPath:  # Violates disallow-host-path policy
+      path: /var/lib
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: hostport-pod
+  namespace: osc-test
+spec:
+  containers:
+  - name: hostport-container
+    image: nginx
+    ports:
+    - containerPort: 80
+      hostPort: 8080  # Violates disallow-host-ports policy
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: privilege-escalation-pod
+  namespace: osc-test
+spec:
+  containers:
+  - name: privilege-escalation-container
+    image: nginx
+    securityContext:
+      allowPrivilegeEscalation: true  # Violates disallow-privilege-escalation policy
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: root-user-pod
+  namespace: osc-test
+spec:
+  containers:
+  - name: root-user-container
+    image: nginx
+    securityContext:
+      runAsUser: 0  # Violates require-run-as-non-root-user policy
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: custom-capabilities-pod
+  namespace: osc-test
+spec:
+  containers:
+  - name: custom-capabilities-container
+    image: nginx
+    securityContext:
+      capabilities:
+        add: ["SYS_ADMIN"]  # Violates disallow-capabilities policy
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: custom-seccomp-pod
+  namespace: osc-test
+spec:
+  securityContext:
+    seccompProfile:
+      type: Unconfined  # Violates restrict-seccomp policy
+  containers:
+  - name: custom-seccomp-container
+    image: nginx
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: custom-selinux-pod
+  namespace: osc-test
+spec:
+  securityContext:
+    seLinuxOptions:
+      user: "system_u"  # Violates disallow-selinux policy
+      role: "system_r"
+  containers:
+  - name: custom-selinux-container
+    image: nginx
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: custom-proc-mount-pod
+  namespace: osc-test
+spec:
+  containers:
+  - name: custom-proc-mount-container
+    image: nginx
+    securityContext:
+      procMount: "Unmasked"  # Violates disallow-proc-mount policy

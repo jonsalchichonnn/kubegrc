@@ -1,4 +1,4 @@
-FROM python:3.9
+FROM python:3.11
 WORKDIR /app
 COPY watch_and_report.py /app/watch_and_report.py
 COPY generate_report.py /app/generate_report.py
