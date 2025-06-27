@@ -1,6 +1,18 @@
 # kubegrc
 Evaluación de Cumplimiento y Gestión de Riesgos en Kubernetes sobre GCP
 
+## Dependencies
+### Helm
+Helm is used to install and manage Kubernetes resources. Follow the [official installation guide]((https://helm.sh/docs/intro/install/)) to set it up on your system.
+
+### Kyverno
+Kyverno must be installed both in your Kubernetes cluster and locally (CLI):
+- Cluster installation: [Install Kyverno in your cluster](https://kyverno.io/docs/installation/methods/#standalone-installation).
+- Local CLI: [Install the Kyverno CLI](https://kyverno.io/docs/installation/methods/#standalone-installation) to enable local policy testing and validation.
+
+### OpenKruise
+OpenKruise extends Kubernetes workload capabilities. Please install it by following the [official installation instructions](https://openkruise.io/docs/installation/#install-with-helm).
+
 ## Prerequisites
 ### Setting up environment variables
 Before deploying, create the environment variable SLACK_TOKEN for alert communications.
