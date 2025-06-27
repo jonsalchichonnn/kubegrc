@@ -1,23 +1,30 @@
-# kubegrc
-Evaluación de Cumplimiento y Gestión de Riesgos en Kubernetes sobre GCP
+# KubeGRC
+## About The Project
+KubeGRC is a tool that assesses and manages security risks and compliance for Kubernetes workloads in a GCP environment.
 
-## Dependencies
-### Helm
+Objectives:
+- Perform risk assessments and compliance audits.
+- Implement security controls and policies.
+- Monitor and report compliance status.
+
+## Getting Started
+### Dependencies
+#### Helm
 Helm is used to install and manage Kubernetes resources. Follow the [official installation guide]((https://helm.sh/docs/intro/install/)) to set it up on your system.
 
-### Kyverno
+#### Kyverno
 Kyverno must be installed both in your Kubernetes cluster and locally (CLI):
 - Cluster installation: [Install Kyverno in your cluster](https://kyverno.io/docs/installation/methods/#standalone-installation).
 - Local CLI: [Install the Kyverno CLI](https://kyverno.io/docs/installation/methods/#standalone-installation) to enable local policy testing and validation.
 
-### OpenKruise
+#### OpenKruise
 OpenKruise extends Kubernetes workload capabilities. Please install it by following the [official installation instructions](https://openkruise.io/docs/installation/#install-with-helm).
 
-## Prerequisites
-### Setting up environment variables
+### Prerequisites
+#### Setting up environment variables
 Before deploying, create the environment variable SLACK_TOKEN for alert communications.
 
-### Setting up GCP credentials
+#### Setting up GCP credentials
 1. Create the GCP service account and grant bucket permissions:
 
     ```bash
@@ -60,4 +67,9 @@ echo "gcp-credentials.json" >> .gitignore
 To verify the file is not tracked by git:
 ```bash
 git check-ignore gcp-credentials.json
+```
+
+## Usage
+```sh
+./kubegrc.sh
 ```
